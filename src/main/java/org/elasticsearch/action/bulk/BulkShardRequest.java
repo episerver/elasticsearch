@@ -64,7 +64,9 @@ public class BulkShardRequest extends ShardReplicationOperationRequest<BulkShard
     @Override
     public void beforeLocalFork() {
         for (BulkItemRequest item : items) {
-            ((ShardReplicationOperationRequest) item.request()).beforeLocalFork();
+            if (item.request() instanceof ShardReplicationOperationRequest) {
+                ((ShardReplicationOperationRequest) item.request()).beforeLocalFork();
+            }
         }
     }
 

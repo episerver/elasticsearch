@@ -354,7 +354,7 @@ public class TransportUpdateAction extends TransportInstanceSingleOperationActio
                     listener.onFailure(e);
                 }
             });
-        } else if ("none".equals(operation)) {
+        } else if ("update".equals(operation)) {
             UpdateResponse update = new UpdateResponse(getResult.index(), getResult.type(), getResult.id(), getResult.version());
             update.getResult(extractGetResult(request, getResult.version(), updatedSourceAsMap, updateSourceContentType, null));
             listener.onResponse(update);

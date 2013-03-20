@@ -72,7 +72,7 @@ public class UpdateRequest extends InstanceShardOperationRequest<UpdateRequest> 
     @Nullable
     private IndexRequest doc;
 
-    UpdateRequest() {
+    public UpdateRequest() {
 
     }
 

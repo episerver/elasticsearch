@@ -29,6 +29,9 @@ import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction;
+import org.elasticsearch.action.update.TransportUpdateAction;
+import org.elasticsearch.action.update.UpdateRequest;
+import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
@@ -65,13 +68,15 @@ import java.util.Set;
 public class TransportShardBulkAction extends TransportShardReplicationOperationAction<BulkShardRequest, BulkShardRequest, BulkShardResponse> {
 
     private final MappingUpdatedAction mappingUpdatedAction;
+    private final TransportUpdateAction transportUpdateAction;
 
     @Inject
     public TransportShardBulkAction(Settings settings, TransportService transportService, ClusterService clusterService,
                                     IndicesService indicesService, ThreadPool threadPool, ShardStateAction shardStateAction,
-                                    MappingUpdatedAction mappingUpdatedAction) {
+                                    MappingUpdatedAction mappingUpdatedAction, TransportUpdateAction transportUpdateAction) {
         super(settings, transportService, clusterService, indicesService, threadPool, shardStateAction);
         this.mappingUpdatedAction = mappingUpdatedAction;
+        this.transportUpdateAction = transportUpdateAction;
     }
 
     @Override
@@ -227,6 +232,18 @@ public class TransportShardBulkAction extends TransportShardReplicationOperation
                     // nullify the request so it won't execute on the replicas
                     request.items()[i] = null;
                 }
+            } else if (item.request() instanceof UpdateRequest) {
+                UpdateRequest updateRequest = (UpdateRequest) item.request();
+                UpdateResponse updateResponse;
+                // This is probably the wrong way to do this, but it works.
+                try {
+                    updateResponse = this.transportUpdateAction.execute(updateRequest).actionGet();
+                    responses[i] = new BulkItemResponse(item.id(), "update", updateResponse);
+                } catch (Exception e) {
+                    responses[i] = new BulkItemResponse(item.id(), "update,",
+                            new BulkItemResponse.Failure(updateRequest.index(), updateRequest.type(), updateRequest.id(), ExceptionsHelper.detailedMessage(e)));
+                    request.items()[i] = null;
+                }
             }
         }
 
@@ -265,20 +282,28 @@ public class TransportShardBulkAction extends TransportShardReplicationOperation
             if (op == null) {
                 continue; // failed / no matches requested
             }
+            try {
             if (itemRequest.request() instanceof IndexRequest) {
                 IndexRequest indexRequest = (IndexRequest) itemRequest.request();
                 if (!Strings.hasLength(indexRequest.percolate())) {
                     continue;
                 }
-                try {
-                    PercolatorExecutor.Response percolate = indexService.percolateService().percolate(new PercolatorExecutor.DocAndSourceQueryRequest(op.parsedDoc(), indexRequest.percolate()));
-                    ((IndexResponse) itemResponse.response()).matches(percolate.matches());
-                } catch (Exception e) {
+                PercolatorExecutor.Response percolate = indexService.percolateService().percolate(new PercolatorExecutor.DocAndSourceQueryRequest(op.parsedDoc(), indexRequest.percolate()));
+                ((IndexResponse) itemResponse.response()).matches(percolate.matches());
+            } else if (itemRequest.request() instanceof UpdateRequest) {
+            	UpdateRequest updateRequest = (UpdateRequest) itemRequest.request();
+            	if (!Strings.hasLength(updateRequest.percolate())) {
+            		continue;
+            	}
+            	PercolatorExecutor.Response percolate = indexService.percolateService().percolate(new PercolatorExecutor.DocAndSourceQueryRequest(op.parsedDoc(), updateRequest.percolate()));
+            	((UpdateResponse) itemResponse.response()).matches(percolate.matches());
+            }         
+                   } catch (Exception e) {
                     logger.warn("failed to percolate [{}]", e, itemRequest.request());
                 }
             }
         }
-    }
+    
 
     @Override
     protected void shardOperationOnReplica(ReplicaOperationRequest shardRequest) {

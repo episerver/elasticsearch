@@ -31,6 +31,7 @@ import org.elasticsearch.action.admin.indices.create.TransportCreateIndexAction;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.support.TransportAction;
+import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
@@ -98,7 +99,12 @@ public class TransportBulkAction extends TransportAction<BulkRequest, BulkRespon
                 if (!indices.contains(deleteRequest.index())) {
                     indices.add(deleteRequest.index());
                 }
-            }
+            } else if (request instanceof UpdateRequest) {
+            	UpdateRequest updateRequest = (UpdateRequest) request;
+                if (!indices.contains(updateRequest.index())) {
+                    indices.add(updateRequest.index());
+                }
+            }            
         }
 
         if (autoCreateIndex) {
@@ -158,6 +164,10 @@ public class TransportBulkAction extends TransportAction<BulkRequest, BulkRespon
                 DeleteRequest deleteRequest = (DeleteRequest) request;
                 deleteRequest.routing(clusterState.metaData().resolveIndexRouting(deleteRequest.routing(), deleteRequest.index()));
                 deleteRequest.index(clusterState.metaData().concreteIndex(deleteRequest.index()));
+            } else if (request instanceof UpdateRequest) {
+                UpdateRequest updateRequest = (UpdateRequest) request;
+                updateRequest.routing(clusterState.metaData().resolveIndexRouting(updateRequest.routing(), updateRequest.index()));
+                updateRequest.index(clusterState.metaData().concreteIndex(updateRequest.index()));
             }
         }
         final BulkItemResponse[] responses = new BulkItemResponse[bulkRequest.requests.size()];
@@ -199,6 +209,15 @@ public class TransportBulkAction extends TransportAction<BulkRequest, BulkRespon
                     }
                     list.add(new BulkItemRequest(i, request));
                 }
+            } else if (request instanceof UpdateRequest) {
+                UpdateRequest updateRequest = (UpdateRequest) request;
+                ShardId shardId = clusterService.operationRouting().indexShards(clusterState, updateRequest.index(), updateRequest.type(), updateRequest.id(), updateRequest.routing()).shardId();
+                List<BulkItemRequest> list = requestsByShard.get(shardId);
+                if (list == null) {
+                    list = Lists.newArrayList();
+                    requestsByShard.put(shardId, list);
+                }
+                list.add(new BulkItemRequest(i, request));
             }
         }
 
@@ -241,6 +260,10 @@ public class TransportBulkAction extends TransportAction<BulkRequest, BulkRespon
                                 DeleteRequest deleteRequest = (DeleteRequest) request.request();
                                 responses[request.id()] = new BulkItemResponse(request.id(), "delete",
                                         new BulkItemResponse.Failure(deleteRequest.index(), deleteRequest.type(), deleteRequest.id(), message));
+                            } else if (request.request() instanceof UpdateRequest) {
+                                UpdateRequest updateRequest = (UpdateRequest) request.request();
+                                responses[request.id()] = new BulkItemResponse(request.id(), "update",
+                                        new BulkItemResponse.Failure(updateRequest.index(), updateRequest.type(), updateRequest.id(), message));
                             }
                         }
                     }
@@ -255,6 +278,7 @@ public class TransportBulkAction extends TransportAction<BulkRequest, BulkRespon
             });
         }
     }
+
 
     class TransportHandler extends BaseTransportRequestHandler<BulkRequest> {
 
