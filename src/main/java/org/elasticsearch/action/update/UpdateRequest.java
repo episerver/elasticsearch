@@ -61,7 +61,10 @@ public class UpdateRequest extends InstanceShardOperationRequest<UpdateRequest> 
     int retryOnConflict = 0;
 
     private String percolate;
+    
     private BytesReference source;
+    private boolean sourceUnsafe;
+    
     private boolean refresh = false;
 
     private ReplicationType replicationType = ReplicationType.DEFAULT;
@@ -587,4 +590,5 @@ public class UpdateRequest extends InstanceShardOperationRequest<UpdateRequest> 
             upsertRequest.writeTo(out);
         }
     }
+    
 }

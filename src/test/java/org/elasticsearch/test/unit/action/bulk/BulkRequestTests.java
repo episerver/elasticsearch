@@ -67,8 +67,7 @@ public class BulkRequestTests {
         BulkRequest bulkRequest = new BulkRequest();
         bulkRequest.add(bulkAction.getBytes(), 0, bulkAction.length(), true, null, null);
         assertThat(bulkRequest.numberOfActions(), equalTo(2));
-        assertThat(((IndexRequest) bulkRequest.requests().get(0)).source().toBytes(), equalTo(new BytesArray("{ \"field1\" : \"value1\" }" +
-        		"").toBytes()));
+        assertThat(((IndexRequest) bulkRequest.requests().get(0)).source().toBytes(), equalTo(new BytesArray("{ \"field1\" : \"value1\" }").toBytes()));
         assertThat(bulkRequest.requests().get(1), instanceOf(UpdateRequest.class));
         assertThat(((UpdateRequest) bulkRequest.requests().get(1)). source().toBytes(), equalTo(new BytesArray("{ \"script\" : \"ctx._source.field1 = name\", \"params\" : { \"name\" : \"value2\" }}").toBytes()));
     }
