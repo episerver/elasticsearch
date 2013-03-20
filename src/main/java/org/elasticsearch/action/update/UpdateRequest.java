@@ -61,7 +61,7 @@ public class UpdateRequest extends InstanceShardOperationRequest<UpdateRequest> 
     int retryOnConflict = 0;
 
     private String percolate;
-
+    private BytesReference source;
     private boolean refresh = false;
 
     private ReplicationType replicationType = ReplicationType.DEFAULT;
@@ -461,7 +461,11 @@ public class UpdateRequest extends InstanceShardOperationRequest<UpdateRequest> 
         }
         return upsertRequest;
     }
-
+    
+    public BytesReference source() {
+        return source;
+    }
+    
     public UpdateRequest source(XContentBuilder source) throws Exception {
         return source(source.bytes());
     }
@@ -475,6 +479,7 @@ public class UpdateRequest extends InstanceShardOperationRequest<UpdateRequest> 
     }
 
     public UpdateRequest source(BytesReference source) throws Exception {
+    	this.source = source;
         XContentType xContentType = XContentFactory.xContentType(source);
         XContentParser parser = XContentFactory.xContent(xContentType).createParser(source);
         try {
