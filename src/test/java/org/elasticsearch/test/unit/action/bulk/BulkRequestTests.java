@@ -22,6 +22,7 @@ package org.elasticsearch.test.unit.action.bulk;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.testng.annotations.Test;
 
@@ -57,5 +58,17 @@ public class BulkRequestTests {
         BulkRequest bulkRequest = new BulkRequest();
         bulkRequest.add(bulkAction.getBytes(), 0, bulkAction.length(), true, null, null);
         assertThat(bulkRequest.numberOfActions(), equalTo(3));
+    }
+    
+    //Tests Bulk Update
+    @Test
+    public void testSimpleBulk4() throws Exception {
+        String bulkAction = copyToStringFromClasspath("/org/elasticsearch/test/unit/action/bulk/simple-bulk4.json");
+        BulkRequest bulkRequest = new BulkRequest();
+        bulkRequest.add(bulkAction.getBytes(), 0, bulkAction.length(), true, null, null);
+        assertThat(bulkRequest.numberOfActions(), equalTo(2));
+        assertThat(((IndexRequest) bulkRequest.requests().get(0)).source().toBytes(), equalTo(new BytesArray("{ \"field1\" : \"value1\" }").toBytes()));
+        assertThat(bulkRequest.requests().get(1), instanceOf(UpdateRequest.class));
+        assertThat(((IndexRequest) bulkRequest.requests().get(1)).source().toBytes(), equalTo(new BytesArray("{ \"script\" : \"ctx._source.field1 = name\", \"params\" : { \"name\" : \"value2\" }}").toBytes()));
     }
 }
