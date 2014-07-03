@@ -23,6 +23,7 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.*;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.AnalyzerWrapper;
+import org.apache.lucene.analysis.SimpleAnalyzerWrapper;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queries.FilterClause;
 import org.apache.lucene.queries.TermFilter;
@@ -869,7 +870,7 @@ public class MapperService extends AbstractIndexComponent implements Iterable<Do
         }
     }
 
-    final class SmartIndexNameSearchAnalyzer extends AnalyzerWrapper {
+    final class SmartIndexNameSearchAnalyzer extends SimpleAnalyzerWrapper {
 
         private final Analyzer defaultAnalyzer;
 
@@ -898,14 +899,9 @@ public class MapperService extends AbstractIndexComponent implements Iterable<Do
             }
             return defaultAnalyzer;
         }
-
-        @Override
-        protected TokenStreamComponents wrapComponents(String fieldName, TokenStreamComponents components) {
-            return components;
-        }
     }
 
-    final class SmartIndexNameSearchQuoteAnalyzer extends AnalyzerWrapper {
+    final class SmartIndexNameSearchQuoteAnalyzer extends SimpleAnalyzerWrapper {
 
         private final Analyzer defaultAnalyzer;
 
@@ -933,11 +929,6 @@ public class MapperService extends AbstractIndexComponent implements Iterable<Do
                 return mappers.mapper().searchQuoteAnalyzer();
             }
             return defaultAnalyzer;
-        }
-
-        @Override
-        protected TokenStreamComponents wrapComponents(String fieldName, TokenStreamComponents components) {
-            return components;
         }
     }
 
