@@ -20,6 +20,9 @@
 package org.apache.lucene.analysis;
 
 import java.io.Reader;
+import java.lang.ref.WeakReference;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * A simple analyzer wrapper, that doesn't allow to wrap components or reader. By disallowing
@@ -61,6 +64,40 @@ public abstract class SimpleAnalyzerWrapper extends AnalyzerWrapper {
         public void setReusableComponents(Analyzer analyzer, String fieldName, TokenStreamComponents components) {
             Analyzer wrappedAnalyzer = wrapper.getWrappedAnalyzer(fieldName);
             wrappedAnalyzer.getReuseStrategy().setReusableComponents(wrappedAnalyzer, fieldName, components);
+        }
+    }
+    
+    public static class WeakReferencePerFieldReuseStrategy extends ReuseStrategy {
+
+        public WeakReferencePerFieldReuseStrategy() {}
+
+        @Override
+        public TokenStreamComponents getReusableComponents(Analyzer analyzer, String fieldName) {
+            WeakReference<Map<String, TokenStreamComponents>> componentsPerFieldReference = (WeakReference<Map<String, TokenStreamComponents>>) getStoredValue(analyzer);
+            return componentsPerFieldReference != null && componentsPerFieldReference.get() != null ? componentsPerFieldReference.get().get(fieldName) : null;
+        }
+
+        public void setReusableComponents(Analyzer analyzer, String fieldName, TokenStreamComponents components) {
+            WeakReference<Map<String, TokenStreamComponents>> componentsPerFieldReference = (WeakReference<Map<String, TokenStreamComponents>>) getStoredValue(analyzer);
+            if (componentsPerFieldReference == null || componentsPerFieldReference.get() == null) {
+                componentsPerFieldReference = new WeakReference<Map<String, TokenStreamComponents>>(new HashMap<String, TokenStreamComponents>());
+                setStoredValue(analyzer, componentsPerFieldReference);
+            }
+            componentsPerFieldReference.get().put(fieldName, components);
+        }
+    }
+    
+    public static class NoReuseStrategy extends ReuseStrategy {
+
+        public NoReuseStrategy() {}
+
+        @Override
+        public TokenStreamComponents getReusableComponents(Analyzer analyzer, String fieldName) {
+            return null;
+        }
+
+        public void setReusableComponents(Analyzer analyzer, String fieldName, TokenStreamComponents components) {
+            return;
         }
     }
 }
