@@ -52,6 +52,7 @@ public class XContentMapValues {
     @SuppressWarnings({"unchecked"})
     private static void extractRawValues(List values, Map<String, Object> part, String[] pathElements, int index) {
         if (index == pathElements.length) {
+            values.add(part); //< Actually use the values // John Johansson
             return;
         }
 

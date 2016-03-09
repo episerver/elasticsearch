@@ -19,6 +19,8 @@
 
 package org.elasticsearch.get;
 
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.index.get.GetField;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ElasticsearchIllegalArgumentException;
 import org.elasticsearch.action.ShardOperationFailedException;
@@ -48,7 +50,7 @@ import static org.hamcrest.Matchers.*;
 public class GetActionTests extends ElasticsearchIntegrationTest {
 
     @Test
-    public void simpleGetTests() {
+    public void simpleGetTests() throws ElasticsearchException, IOException {
         assertAcked(prepareCreate("test")
                 .setSettings(ImmutableSettings.settingsBuilder().put("index.refresh_interval", -1))
                 .addAlias(new Alias("alias")));
@@ -59,6 +61,14 @@ public class GetActionTests extends ElasticsearchIntegrationTest {
 
         logger.info("--> index doc 1");
         client().prepareIndex("test", "type1", "1").setSource("field1", "value1", "field2", "value2").get();
+        final XContentBuilder author = jsonBuilder().startObject().startObject("author").field("name", "Stephen King").startObject("born")
+                .field("name", "Stephen Edwin King").field("date", "1947-09-21").field("city", "Portland").field("State", "Maine").field("Country", "United States")
+                .endObject()
+                .array("occupation", "novelist", "short story writer", "screenwriter", "columnist", "actor", "television producer", "film director", "singer", "musician")
+                .endObject()
+                .field("field2", "value2")
+                .endObject();
+        client().prepareIndex("test", "author", "1").setSource(author).get();
 
         logger.info("--> realtime get 1");
         response = client().prepareGet(indexOrAlias(), "type1", "1").get();
@@ -107,6 +117,16 @@ public class GetActionTests extends ElasticsearchIntegrationTest {
         assertThat(response.getSourceAsMap(), hasKey("field1"));
         assertThat(response.getSourceAsMap(), not(hasKey("field2")));
         assertThat(response.getField("field1").getValues().get(0).toString(), equalTo("value1"));
+        assertThat(response.getField("field2"), nullValue());
+
+        response = client().prepareGet(indexOrAlias(), "author", "1").setFetchSource("author.*", null).get();
+        assertThat(response.isExists(), equalTo(true));
+        assertThat(response.getIndex(), equalTo("test"));
+        Map<String, Object> srcMap = response.getSourceAsMap();
+        assertThat(srcMap, hasKey("author"));
+        assertThat(srcMap, not(hasKey("field2")));
+        assertThat(response.getField("author.name").getValues().get(0).toString(), equalTo("Stephen King"));
+        assertThat(response.getField("author.born.date").getValues().get(0).toString(), equalTo("1947-09-21"));
         assertThat(response.getField("field2"), nullValue());
 
         logger.info("--> flush the index, so we load it from it");
@@ -951,6 +971,7 @@ public class GetActionTests extends ElasticsearchIntegrationTest {
                 "}";
 
         index("test", "doc", "1", doc);
+        refresh();
         String[] fieldsList = {"suggest"};
         // before refresh - document is only in translog
         assertGetFieldsAlwaysNull(indexOrAlias(), "doc", "1", fieldsList);
@@ -1329,15 +1350,21 @@ public class GetActionTests extends ElasticsearchIntegrationTest {
 
     protected void assertGetFieldNull(String index, String type, String docId, String field, boolean ignoreErrors, @Nullable String routing) {
         //for get
-        GetResponse response = getDocument(index, type, docId, field, ignoreErrors, routing);
-        assertTrue(response.isExists());
-        assertNull(response.getField(field));
-        assertThat(response.getId(), equalTo(docId));
+        {
+            GetResponse response = getDocument(index, type, docId, field, ignoreErrors, routing);
+            assertTrue(response.isExists());
+            final GetField responseField = response.getField(field);
+            assertNull(responseField);
+            assertThat(response.getId(), equalTo(docId));
+        }
         //same for multi get
-        response = multiGetDocument(index, type, docId, field, ignoreErrors, routing);
-        assertNull(response.getField(field));
-        assertThat(response.getId(), equalTo(docId));
-        assertTrue(response.isExists());
+        {
+            GetResponse response = multiGetDocument(index, type, docId, field, ignoreErrors, routing);
+            final GetField responseField = response.getField(field);
+            assertNull(responseField);
+            assertThat(response.getId(), equalTo(docId));
+            assertTrue(response.isExists());
+        }
     }
 
     private GetResponse multiGetDocument(String index, String type, String docId, String field, boolean ignoreErrors, @Nullable String routing) {

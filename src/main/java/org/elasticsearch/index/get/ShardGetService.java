@@ -57,6 +57,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
 import static com.google.common.collect.Maps.newHashMapWithExpectedSize;
@@ -298,6 +299,12 @@ public class ShardGetService extends AbstractIndexShardComponent {
                         if (sourceFetchFiltering) {
                             sourceAsMap = XContentMapValues.filter(sourceAsMap, fetchSourceContext.includes(), fetchSourceContext.excludes());
                         }
+                        if (!sourceAsMap.isEmpty()) {
+                            if (fields == null) {
+                                fields = newHashMapWithExpectedSize(2);
+                            }
+                            stealSourceAsFields(sourceAsMap, fields);
+                        }
                         try {
                             sourceToBeReturned = XContentFactory.contentBuilder(sourceContentType).map(sourceAsMap).bytes();
                         } catch (IOException e) {
@@ -410,6 +417,12 @@ public class ShardGetService extends AbstractIndexShardComponent {
                 sourceAsMap = docMapper.transformSourceAsMap(sourceAsMap);
             }
             sourceAsMap = XContentMapValues.filter(sourceAsMap, fetchSourceContext.includes(), fetchSourceContext.excludes());
+            if (!sourceAsMap.isEmpty()) {
+                if (fields == null) {
+                    fields = newHashMapWithExpectedSize(2);
+                }
+                stealSourceAsFields(sourceAsMap, fields);
+            }
             try {
                 source = XContentFactory.contentBuilder(sourceContentType).map(sourceAsMap).bytes();
             } catch (IOException e) {
@@ -418,6 +431,39 @@ public class ShardGetService extends AbstractIndexShardComponent {
         }
 
         return new GetResult(shardId.index().name(), type, id, get.version(), get.exists(), source, fields);
+    }
+
+    private void stealSourceAsFields(Map<String, Object> sourceAsMap, Map<String, GetField> fields) {
+        if (sourceAsMap == null || fields == null || sourceAsMap.isEmpty()) {
+            return;
+        }
+        stealSourceAsFields(null, sourceAsMap, fields);
+    }
+    
+    private static String appendToPath(final String path, final String subPath) {
+        if (subPath == null) {
+            return path;
+        }
+        if (path == null || path.isEmpty()) {
+            return subPath;
+        }
+        return path + "." + subPath;
+    }
+    
+    @SuppressWarnings("unchecked")
+    private static void stealSourceAsFields(final String path, final Object curObj, final Map<String, GetField> fields) {
+        if (curObj instanceof Map<?,?>) {
+            for (final Entry<String, Object> entry : ((Map<String, Object>)curObj).entrySet()) {
+                stealSourceAsFields(appendToPath(path, entry.getKey()), entry.getValue(), fields);
+            }
+        } else {
+            // Should we always overwrite fields here?
+            if (curObj instanceof List) {
+                fields.put(path, new GetField(path, (List<Object>) curObj));
+            } else {
+                fields.put(path, new GetField(path, ImmutableList.of(curObj)));
+            }
+        }
     }
 
     private static FieldsVisitor buildFieldsVisitors(String[] fields, FetchSourceContext fetchSourceContext) {

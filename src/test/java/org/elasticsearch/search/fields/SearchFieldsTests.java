@@ -19,6 +19,7 @@
 
 package org.elasticsearch.search.fields;
 
+import com.carrotsearch.ant.tasks.junit4.dependencies.com.google.common.collect.ImmutableMap;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.search.SearchPhaseExecutionException;
@@ -55,6 +56,7 @@ import static org.hamcrest.Matchers.*;
  */
 public class SearchFieldsTests extends ElasticsearchIntegrationTest {
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testStoredFields() throws Exception {
         createIndex("test");
@@ -64,14 +66,22 @@ public class SearchFieldsTests extends ElasticsearchIntegrationTest {
                 .startObject("field1").field("type", "string").field("store", "yes").endObject()
                 .startObject("field2").field("type", "string").field("store", "no").endObject()
                 .startObject("field3").field("type", "string").field("store", "yes").endObject()
+                .startObject("field4").field("type", "geo_point").field("store", "no").endObject()
+                .startObject("field5").field("type", "geo_point").field("store", "yes").endObject()
                 .endObject().endObject().endObject().string();
 
         client().admin().indices().preparePutMapping().setType("type1").setSource(mapping).execute().actionGet();
+        
+        final ImmutableMap value4 = ImmutableMap.builder().put("lat", 59.335292).put("lon", 18.065817).build();
+        final ImmutableMap value5 = ImmutableMap.builder().put("lat", 59.326944).put("lon", 18.071667).build();
+        final String storedValue5 = value5.get("lat") + "," + value5.get("lon");
 
         client().prepareIndex("test", "type1", "1").setSource(jsonBuilder().startObject()
                 .field("field1", "value1")
                 .field("field2", "value2")
                 .field("field3", "value3")
+                .field("field4").map(value4)
+                .field("field5").map(value5) 
                 .endObject()).execute().actionGet();
 
         client().admin().indices().prepareRefresh().execute().actionGet();
@@ -93,23 +103,40 @@ public class SearchFieldsTests extends ElasticsearchIntegrationTest {
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(1l));
         assertThat(searchResponse.getHits().hits().length, equalTo(1));
         assertThat(searchResponse.getHits().getAt(0).fields().size(), equalTo(1));
+        assertThat(searchResponse.getHits().getAt(0).fields().get("field3").values().size(), equalTo(1));
         assertThat(searchResponse.getHits().getAt(0).fields().get("field3").value().toString(), equalTo("value3"));
+
+        searchResponse = client().prepareSearch().setQuery(matchAllQuery()).addField("field4").execute().actionGet();
+        assertThat(searchResponse.getHits().getTotalHits(), equalTo(1l));
+        assertThat(searchResponse.getHits().hits().length, equalTo(1));
+        assertThat(searchResponse.getHits().getAt(0).fields().size(), equalTo(1));
+        assertThat(searchResponse.getHits().getAt(0).fields().get("field4").values().size(), equalTo(1));
+        assertThat(((Map<?,?>)searchResponse.getHits().getAt(0).fields().get("field4").value()).entrySet(), everyItem(isIn(value4.entrySet())));
+
+        searchResponse = client().prepareSearch().setQuery(matchAllQuery()).addField("field5").execute().actionGet();
+        assertThat(searchResponse.getHits().getTotalHits(), equalTo(1l));
+        assertThat(searchResponse.getHits().hits().length, equalTo(1));
+        assertThat(searchResponse.getHits().getAt(0).fields().size(), equalTo(1));
+        assertThat(searchResponse.getHits().getAt(0).fields().get("field5").values().size(), equalTo(1));
+        assertThat(searchResponse.getHits().getAt(0).fields().get("field5").value().toString(), equalTo(storedValue5));
 
         searchResponse = client().prepareSearch().setQuery(matchAllQuery()).addField("*").execute().actionGet();
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(1l));
         assertThat(searchResponse.getHits().hits().length, equalTo(1));
         assertThat(searchResponse.getHits().getAt(0).source(), nullValue());
-        assertThat(searchResponse.getHits().getAt(0).fields().size(), equalTo(2));
+        assertThat(searchResponse.getHits().getAt(0).fields().size(), equalTo(3));
         assertThat(searchResponse.getHits().getAt(0).fields().get("field1").value().toString(), equalTo("value1"));
         assertThat(searchResponse.getHits().getAt(0).fields().get("field3").value().toString(), equalTo("value3"));
+        assertThat(searchResponse.getHits().getAt(0).fields().get("field5").value().toString(), equalTo(storedValue5));
 
         searchResponse = client().prepareSearch().setQuery(matchAllQuery()).addField("*").addField("_source").execute().actionGet();
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(1l));
         assertThat(searchResponse.getHits().hits().length, equalTo(1));
         assertThat(searchResponse.getHits().getAt(0).source(), notNullValue());
-        assertThat(searchResponse.getHits().getAt(0).fields().size(), equalTo(2));
+        assertThat(searchResponse.getHits().getAt(0).fields().size(), equalTo(3));
         assertThat(searchResponse.getHits().getAt(0).fields().get("field1").value().toString(), equalTo("value1"));
         assertThat(searchResponse.getHits().getAt(0).fields().get("field3").value().toString(), equalTo("value3"));
+        assertThat(searchResponse.getHits().getAt(0).fields().get("field5").value().toString(), equalTo(storedValue5));
     }
 
     @Test
