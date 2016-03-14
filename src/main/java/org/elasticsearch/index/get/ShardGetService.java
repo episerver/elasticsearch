@@ -20,6 +20,7 @@
 package org.elasticsearch.index.get;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import org.apache.lucene.index.Term;
 import org.elasticsearch.ElasticsearchException;
@@ -55,9 +56,11 @@ import org.elasticsearch.search.lookup.SearchLookup;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static com.google.common.collect.Maps.newHashMapWithExpectedSize;
@@ -303,7 +306,8 @@ public class ShardGetService extends AbstractIndexShardComponent {
                             if (fields == null) {
                                 fields = newHashMapWithExpectedSize(2);
                             }
-                            stealSourceAsFields(sourceAsMap, fields);
+                            final ImmutableSet<String> includedSet = ImmutableSet.<String>builder().add(fetchSourceContext.includes()).build();
+                            stealSourceAsFields(sourceAsMap, fields, includedSet);
                         }
                         try {
                             sourceToBeReturned = XContentFactory.contentBuilder(sourceContentType).map(sourceAsMap).bytes();
@@ -421,7 +425,8 @@ public class ShardGetService extends AbstractIndexShardComponent {
                 if (fields == null) {
                     fields = newHashMapWithExpectedSize(2);
                 }
-                stealSourceAsFields(sourceAsMap, fields);
+                final ImmutableSet<String> includedSet = ImmutableSet.<String>builder().add(fetchSourceContext.includes()).build();
+                stealSourceAsFields(sourceAsMap, fields, includedSet);
             }
             try {
                 source = XContentFactory.contentBuilder(sourceContentType).map(sourceAsMap).bytes();
@@ -433,11 +438,11 @@ public class ShardGetService extends AbstractIndexShardComponent {
         return new GetResult(shardId.index().name(), type, id, get.version(), get.exists(), source, fields);
     }
 
-    private void stealSourceAsFields(Map<String, Object> sourceAsMap, Map<String, GetField> fields) {
-        if (sourceAsMap == null || fields == null || sourceAsMap.isEmpty()) {
+    private void stealSourceAsFields(Map<String, Object> sourceAsMap, Map<String, GetField> fields, final Set<String> included) {
+        if (sourceAsMap == null || fields == null || sourceAsMap.isEmpty() || included == null) {
             return;
         }
-        stealSourceAsFields(null, sourceAsMap, fields);
+        stealSourceAsFields(null, sourceAsMap, fields, included);
     }
     
     private static String appendToPath(final String path, final String subPath) {
@@ -451,17 +456,18 @@ public class ShardGetService extends AbstractIndexShardComponent {
     }
     
     @SuppressWarnings("unchecked")
-    private static void stealSourceAsFields(final String path, final Object curObj, final Map<String, GetField> fields) {
-        if (curObj instanceof Map<?,?>) {
-            for (final Entry<String, Object> entry : ((Map<String, Object>)curObj).entrySet()) {
-                stealSourceAsFields(appendToPath(path, entry.getKey()), entry.getValue(), fields);
-            }
-        } else {
+    private static void stealSourceAsFields(final String path, final Object curObj, final Map<String, GetField> fields, final Set<String> included) {
+        if (path != null && included.contains(path)) {
             // Should we always overwrite fields here?
             if (curObj instanceof List) {
                 fields.put(path, new GetField(path, (List<Object>) curObj));
             } else {
                 fields.put(path, new GetField(path, ImmutableList.of(curObj)));
+            }
+        }
+        if (curObj instanceof Map<?,?>) {
+            for (final Entry<String, Object> entry : ((Map<String, Object>)curObj).entrySet()) {
+                stealSourceAsFields(appendToPath(path, entry.getKey()), entry.getValue(), fields, included);
             }
         }
     }
