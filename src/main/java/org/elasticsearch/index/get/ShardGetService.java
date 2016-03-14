@@ -439,7 +439,7 @@ public class ShardGetService extends AbstractIndexShardComponent {
     }
 
     private void stealSourceAsFields(Map<String, Object> sourceAsMap, Map<String, GetField> fields, final Set<String> included) {
-        if (sourceAsMap == null || fields == null || sourceAsMap.isEmpty() || included == null) {
+        if (sourceAsMap == null || fields == null || sourceAsMap.isEmpty() || included == null || included.isEmpty()) {
             return;
         }
         stealSourceAsFields(null, sourceAsMap, fields, included);

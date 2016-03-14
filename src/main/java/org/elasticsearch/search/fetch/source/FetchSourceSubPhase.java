@@ -74,7 +74,7 @@ public class FetchSourceSubPhase implements FetchSubPhase {
     }
 
     private void stealSourceAsFields(Map<String, Object> sourceAsMap, final Map<String, SearchHitField> fields, final Set<String> included) {
-        if (sourceAsMap == null || fields == null || sourceAsMap.isEmpty() || included != null) {
+        if (sourceAsMap == null || fields == null || sourceAsMap.isEmpty() || included == null || included.isEmpty()) {
             return;
         }
         stealSourceAsFields(null, sourceAsMap, fields, included);
