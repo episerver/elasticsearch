@@ -499,17 +499,17 @@ public class SimpleStringMappingTests extends ElasticsearchSingleNodeTest {
                 .endObject().endObject().string();
 
         DocumentMapper defaultMapper = parser.parse(mapping);
-        char[] chars = new char[11000];
-        Arrays.fill(chars, 'M');
+        char[] chars = new char[16384];
+        Arrays.fill(chars, 'Ö');
         ParsedDocument parsedDoc = defaultMapper.parse("type", "1", XContentFactory.jsonBuilder()
                 .startObject()
-                .field("str1", new String(chars, 0, 10923)) //< should not be stored (auto ignore above)
-                .field("str2", new String(chars, 0, 10922)) //< should be stored
+                .field("str1", "A" + new String(chars) + "B") //< should be truncated and stored
+                .field("str2", "A" + new String(chars, 0, 16382) + "B") //< should be stored
                 .endObject()
                 .bytes());
         final Document doc = parsedDoc.rootDoc();
         assertEquals(null, docValuesType(doc, "str1"));
-        assertEquals(null, docValueString(doc, "str1"));
-        assertEquals(new String(chars, 0, 10922), docValueString(doc, "str2"));
+        assertEquals("A" + new String(chars, 0, 16382), docValueString(doc, "str1"));
+        assertEquals("A" + new String(chars, 0, 16382) + "B", docValueString(doc, "str2"));
     }
 }

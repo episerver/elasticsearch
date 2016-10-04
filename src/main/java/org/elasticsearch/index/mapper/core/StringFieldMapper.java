@@ -42,6 +42,7 @@ import org.elasticsearch.index.mapper.internal.AllFieldMapper;
 import org.elasticsearch.index.similarity.SimilarityProvider;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
 
@@ -55,7 +56,9 @@ import static org.elasticsearch.index.mapper.core.TypeParsers.parseMultiField;
 public class StringFieldMapper extends AbstractFieldMapper<String> implements AllFieldMapper.IncludeInAll {
 
     public static final String CONTENT_TYPE = "string";
-    private static final int maxIgnoreAbove = 10922; //< 32766 (Lucene) / 3 (max bytes/char)
+    // private static final int maxIgnoreAbove = 10922; //< 32766 (Lucene) / 3 (max bytes/char)
+    private static final int maxLuceneTermByteCount = 32766;
+    private static final Charset utf8Charset = Charset.forName("UTF-8");
 
     public static class Defaults extends AbstractFieldMapper.Defaults {
         public static final FieldType FIELD_TYPE = new FieldType(AbstractFieldMapper.Defaults.FIELD_TYPE);
@@ -213,7 +216,7 @@ public class StringFieldMapper extends AbstractFieldMapper<String> implements Al
         this.searchQuotedAnalyzer = searchQuotedAnalyzer != null ? searchQuotedAnalyzer : this.searchAnalyzer;
 
         // If field is not tokenized and there is no ignore_above set, use reasonable default to mimic older version of Lucene...
-        this.ignoreAbove = (fieldType.tokenized() || (ignoreAbove > -1)) ? ignoreAbove : maxIgnoreAbove;
+        this.ignoreAbove = ignoreAbove; // (fieldType.tokenized() || (ignoreAbove > -1)) ? ignoreAbove : maxIgnoreAbove;
     }
 
     @Override
@@ -278,26 +281,40 @@ public class StringFieldMapper extends AbstractFieldMapper<String> implements Al
     @Override
     protected void parseCreateField(ParseContext context, List<Field> fields) throws IOException {
         ValueAndBoost valueAndBoost = parseCreateFieldForString(context, nullValue, boost);
-        if (valueAndBoost.value() == null) {
+        String value = valueAndBoost.value();
+        if (value == null) {
             return;
         }
-        if (ignoreAbove > 0 && valueAndBoost.value().length() > ignoreAbove) {
-            return;
+        if (ignoreAbove > 0) {
+            if (value.length() > ignoreAbove) {
+                return;
+            }
+        } else if (!fieldType.tokenized()) { //< !ignore_above && not_analyzed
+            final byte[] valueBytes = value.getBytes(utf8Charset);
+            if (valueBytes.length > maxLuceneTermByteCount) {
+                // Find char boundaries, backwards, by looking at the high order bits for single of leading bytes...
+                for (int pos = maxLuceneTermByteCount; pos >= 0; pos--) {
+                    final int msb = (valueBytes[pos] & 0xff) >>> 6;
+                    if (msb != 2) { //< Continuation byte
+                        value = new String(valueBytes, 0, pos, utf8Charset);
+                        break;
+                    }
+                }
+            }
         }
         if (context.includeInAll(includeInAll, this)) {
-            context.allEntries().addText(names.fullName(), valueAndBoost.value(), valueAndBoost.boost());
+            context.allEntries().addText(names.fullName(), value, valueAndBoost.boost());
         }
-
         if (fieldType.indexed() || fieldType.stored()) {
-            Field field = new Field(names.indexName(), valueAndBoost.value(), fieldType);
+            Field field = new Field(names.indexName(), value, fieldType);
             field.setBoost(valueAndBoost.boost());
             fields.add(field);
         }
         if (hasDocValues()) {
-            fields.add(new SortedSetDocValuesField(names.indexName(), new BytesRef(valueAndBoost.value())));
+            fields.add(new SortedSetDocValuesField(names.indexName(), new BytesRef(value)));
         }
         if (fields.isEmpty()) {
-            context.ignoredValue(names.indexName(), valueAndBoost.value());
+            context.ignoredValue(names.indexName(), value);
         }
     }
 
