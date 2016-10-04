@@ -55,6 +55,7 @@ import static org.elasticsearch.index.mapper.core.TypeParsers.parseMultiField;
 public class StringFieldMapper extends AbstractFieldMapper<String> implements AllFieldMapper.IncludeInAll {
 
     public static final String CONTENT_TYPE = "string";
+    private static final int maxIgnoreAbove = 10922; //< 32766 (Lucene) / 3 (max bytes/char)
 
     public static class Defaults extends AbstractFieldMapper.Defaults {
         public static final FieldType FIELD_TYPE = new FieldType(AbstractFieldMapper.Defaults.FIELD_TYPE);
@@ -210,7 +211,9 @@ public class StringFieldMapper extends AbstractFieldMapper<String> implements Al
         this.nullValue = nullValue;
         this.positionOffsetGap = positionOffsetGap;
         this.searchQuotedAnalyzer = searchQuotedAnalyzer != null ? searchQuotedAnalyzer : this.searchAnalyzer;
-        this.ignoreAbove = ignoreAbove;
+
+        // If field is not tokenized and there is no ignore_above set, use reasonable default to mimic older version of Lucene...
+        this.ignoreAbove = (fieldType.tokenized() || (ignoreAbove > -1)) ? ignoreAbove : maxIgnoreAbove;
     }
 
     @Override

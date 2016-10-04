@@ -422,6 +422,13 @@ public class SimpleStringMappingTests extends ElasticsearchSingleNodeTest {
         return null;
     }
 
+    public static String docValueString(Document document, String fieldName) {
+        for (IndexableField field : document.getFields(fieldName)) {
+            return field.stringValue();
+        }
+        return null;
+    }
+
     @Test
     public void testDisableNorms() throws Exception {
         String mapping = XContentFactory.jsonBuilder().startObject().startObject("type")
@@ -477,4 +484,32 @@ public class SimpleStringMappingTests extends ElasticsearchSingleNodeTest {
         assertEquals(new TermsFilter(new Term("field", "value1"), new Term("field", "value2")), mapper.termsFilter(Arrays.asList("value1", "value2"), null));
     }
 
+    public void testBackwardsSizeLimitationOnNotAnalyzedStringFields() throws Exception {
+        String mapping = XContentFactory.jsonBuilder().startObject().startObject("type")
+                .startObject("properties")
+                    .startObject("str1")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                    .endObject()
+                    .startObject("str2")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                    .endObject()
+                .endObject()
+                .endObject().endObject().string();
+
+        DocumentMapper defaultMapper = parser.parse(mapping);
+        char[] chars = new char[11000];
+        Arrays.fill(chars, 'M');
+        ParsedDocument parsedDoc = defaultMapper.parse("type", "1", XContentFactory.jsonBuilder()
+                .startObject()
+                .field("str1", new String(chars, 0, 10923)) //< should not be stored (auto ignore above)
+                .field("str2", new String(chars, 0, 10922)) //< should be stored
+                .endObject()
+                .bytes());
+        final Document doc = parsedDoc.rootDoc();
+        assertEquals(null, docValuesType(doc, "str1"));
+        assertEquals(null, docValueString(doc, "str1"));
+        assertEquals(new String(chars, 0, 10922), docValueString(doc, "str2"));
+    }
 }

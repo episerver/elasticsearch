@@ -21,6 +21,7 @@ package org.elasticsearch.search.fetch.source;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableList;
+import org.elasticsearch.common.regex.Regex;
 import org.elasticsearch.search.internal.InternalSearchHitField;
 import org.elasticsearch.search.SearchHitField;
 import com.google.common.collect.ImmutableMap;
@@ -89,10 +90,20 @@ public class FetchSourceSubPhase implements FetchSubPhase {
         }
         return path + "." + subPath;
     }
-    
+
+    private static boolean isIncludedPath(final String path, final Set<String> included) {
+        if (path != null && included != null) {
+            if (included.contains(path)) return true;
+            for (final String pattern : included) {
+                if (Regex.simpleMatch(pattern, path)) return true;
+            }
+        }
+        return false;
+    }
+
     @SuppressWarnings("unchecked")
     private static void stealSourceAsFields(final String path, final Object curObj, final Map<String, SearchHitField> fields, final Set<String> included) {
-        if (path != null && included.contains(path)) {
+        if (isIncludedPath(path, included)) {
             // Should we always overwrite fields here?
             if (curObj instanceof List) {
                 fields.put(path, new InternalSearchHitField(path, (List<Object>) curObj));

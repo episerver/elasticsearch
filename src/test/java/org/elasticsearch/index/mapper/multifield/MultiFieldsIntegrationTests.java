@@ -119,7 +119,7 @@ public class MultiFieldsIntegrationTests extends ElasticsearchIntegrationTest {
         assertThat(aField.get("fields"), notNullValue());
 
         Map bField = ((Map) XContentMapValues.extractValue("properties.a.fields.b", mappingSource));
-        assertThat(bField.size(), equalTo(2));
+        assertThat(bField.size(), equalTo(3));
         assertThat(bField.get("type").toString(), equalTo("string"));
         assertThat(bField.get("index").toString(), equalTo("not_analyzed"));
 
@@ -162,7 +162,7 @@ public class MultiFieldsIntegrationTests extends ElasticsearchIntegrationTest {
         assertThat(aField.get("fields"), notNullValue());
 
         Map bField = ((Map) XContentMapValues.extractValue("properties.a.fields.b", mappingSource));
-        assertThat(bField.size(), equalTo(2));
+        assertThat(bField.size(), equalTo(3));
         assertThat(bField.get("type").toString(), equalTo("string"));
         assertThat(bField.get("index").toString(), equalTo("not_analyzed"));
 
@@ -188,7 +188,7 @@ public class MultiFieldsIntegrationTests extends ElasticsearchIntegrationTest {
         assertThat(aField.get("fields"), notNullValue());
 
         Map bField = ((Map) XContentMapValues.extractValue("properties.a.fields.b", mappingSource));
-        assertThat(bField.size(), equalTo(2));
+        assertThat(bField.size(), equalTo(3));
         assertThat(bField.get("type").toString(), equalTo("string"));
         assertThat(bField.get("index").toString(), equalTo("not_analyzed"));
 
@@ -214,7 +214,7 @@ public class MultiFieldsIntegrationTests extends ElasticsearchIntegrationTest {
         assertThat(aField.get("fields"), notNullValue());
 
         Map bField = ((Map) XContentMapValues.extractValue("properties.a.fields.b", mappingSource));
-        assertThat(bField.size(), equalTo(2));
+        assertThat(bField.size(), equalTo(3));
         assertThat(bField.get("type").toString(), equalTo("string"));
         assertThat(bField.get("index").toString(), equalTo("not_analyzed"));
 

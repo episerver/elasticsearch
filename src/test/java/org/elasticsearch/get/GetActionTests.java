@@ -91,13 +91,6 @@ public class GetActionTests extends ElasticsearchIntegrationTest {
         assertThat(response.getFields().size(), equalTo(0));
         assertThat(response.getSourceAsBytes(), nullValue());
 
-        logger.info("--> realtime get 1 (no type)");
-        response = client().prepareGet(indexOrAlias(), null, "1").get();
-        assertThat(response.isExists(), equalTo(true));
-        assertThat(response.getIndex(), equalTo("test"));
-        assertThat(response.getSourceAsMap().get("field1").toString(), equalTo("value1"));
-        assertThat(response.getSourceAsMap().get("field2").toString(), equalTo("value2"));
-
         logger.info("--> non realtime get 1");
         response = client().prepareGet(indexOrAlias(), "type1", "1").setRealtime(false).get();
         assertThat(response.isExists(), equalTo(false));
@@ -972,6 +965,7 @@ public class GetActionTests extends ElasticsearchIntegrationTest {
 
         index("test", "doc", "1", doc);
         refresh();
+        Thread.yield();
         String[] fieldsList = {"suggest"};
         // before refresh - document is only in translog
         assertGetFieldsAlwaysNull(indexOrAlias(), "doc", "1", fieldsList);
