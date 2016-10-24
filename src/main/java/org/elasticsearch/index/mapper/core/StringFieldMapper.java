@@ -56,8 +56,8 @@ import static org.elasticsearch.index.mapper.core.TypeParsers.parseMultiField;
 public class StringFieldMapper extends AbstractFieldMapper<String> implements AllFieldMapper.IncludeInAll {
 
     public static final String CONTENT_TYPE = "string";
-    // private static final int maxIgnoreAbove = 10922; //< 32766 (Lucene) / 3 (max bytes/char)
     private static final int maxLuceneTermByteCount = 32766;
+    private static final int maxTermChars = maxLuceneTermByteCount / 3; //< 32766 (Lucene) / 3 (max bytes/char)
     private static final Charset utf8Charset = Charset.forName("UTF-8");
 
     public static class Defaults extends AbstractFieldMapper.Defaults {
@@ -286,14 +286,14 @@ public class StringFieldMapper extends AbstractFieldMapper<String> implements Al
             return;
         }
         if (ignoreAbove > 0) {
-            if (value.length() > ignoreAbove) {
+            if (ignoreAbove < value.length()) {
                 return;
             }
-        } else if (!fieldType.tokenized()) { //< !ignore_above && not_analyzed
-            final byte[] valueBytes = value.getBytes(utf8Charset);
-            if (valueBytes.length > maxLuceneTermByteCount) {
+        } else if (maxTermChars < value.length()) { //< Ignore small strings, for better performance
+            final byte[] valueBytes = value.getBytes(utf8Charset);  //< Is there a faster way? I.e. can we substr without unpacking?
+            if (maxLuceneTermByteCount < valueBytes.length) {
                 // Find char boundaries, backwards, by looking at the high order bits for single of leading bytes...
-                for (int pos = maxLuceneTermByteCount; pos >= 0; pos--) {
+                for (int pos = maxLuceneTermByteCount; 0 <= pos; pos--) {
                     final int msb = (valueBytes[pos] & 0xff) >>> 6;
                     if (msb != 2) { //< Continuation byte
                         value = new String(valueBytes, 0, pos, utf8Charset);
